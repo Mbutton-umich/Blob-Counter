@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: testUtil.cpp
-Version: 1.0  Beta
-Updated: FRI11FEB22
+Version: 1.2  RBT Update
+Updated: MON14FEB22
 
 testUtil functions as a test bench for the frames code. Checking inputs, outputs, and performance time. Also has installation calculation functions.
 
@@ -8,8 +8,13 @@ TODO: is a location I need to come back for some reason
 OPTIM: is a location that is marked for potential improvement
 !!!!: is a location with specific and dangerous importance
 */
-
+#pragma once
+#define _CRT_SECURE_NO_WARNINGS
 #include "testUtil.h"
+
+//!!!!: Must declare the ROOT and NILL globals for RBT here outside of main()
+//struct node* ROOT = NULL;
+//struct node* NILL = NULL;
 
 //Reads in test matrices from a folder named "testMats", where files are named test#.txt and testNum is #
 void readTestMat(int myNums_in[][COLS], int testNum_in)
@@ -63,19 +68,54 @@ void printDistTable(const struct blob dist_in[(BLOBLIM * BLOBLIM)], const short&
 	printf("\n");
 }
 
-void printBlockList(const short blockList_in[2 * BLOBLIM], const short& taken_in)
-{
-	printf("Printing Block List Below:\n{");
-	for (int k = 0; k < taken_in; ++k)
-	{
-		printf(" %i ", blockList_in[k]);
-	}
-	printf("}\n");
-}
-
 void printCrossCount(const short& crossCount_in)
 {
 	printf("Current Cross Count: %i \n", crossCount_in);
+}
+
+void recurPrintTree(struct node* node_in)
+{
+	if (node_in != NILL)
+	{
+		recurPrintTree(node_in->left);
+		printf("%d\t", node_in->data);
+		recurPrintTree(node_in->right);
+	}
+}
+
+void printTree(struct node* node_in)
+{
+	printf("Printing Tree Contents Below (Should be in Order):\n");
+	recurPrintTree(node_in);
+	printf("\n");
+}
+
+//Tests the RBT tree stuff
+void testTree()
+{
+	//Test making the tree
+	initTree();
+
+	//Fill the tree with random values
+	int n = 100;
+	for (int i = 0; i < n; i++)
+	{
+		insert((short)(rand() % 100));
+	}
+
+	//Print them
+	
+	printTree(ROOT);
+
+	//Verify that a random number is in the tree
+	short missing = (short)(rand() % 100);
+	bool res = contains(ROOT, missing);
+	printf("\nIt's %d that %i is in the tree.\n", res, missing);
+
+	//Test frees 
+	destroyTree(ROOT);
+	printf("\nThe tree should be empty, nothing below.\n");
+	printTree(ROOT);
 }
 
 //Walkthrough of the two frame update process
@@ -99,16 +139,14 @@ void processWalkthrough(int temp_in[][COL], float oldBT_in[][COORDDIM], short& o
 	fillDist(oldBT_in, oldNum_in, newBT_in, newNum_in, dist_in, count_in);
 	printDistTable(dist_in, count_in);
 
-	//Making this dummy block list to test internal functions of updateLoc() normally encapsulated in the matchShortest() function
-	//!!!Must be initialized to zeros
-	short blockList[2 * BLOBLIM] = { 0 };
-	short taken = 0;
-	matchShortest(oldBT_in, oldNum_in, newBT_in, newNum_in, dist_in, count_in, blockList, taken);
+	//Setup the exclusion tree 
+	initTree();
+	matchShortest(oldBT_in, oldNum_in, newBT_in, newNum_in, dist_in, count_in);
+	printTree(ROOT);
 
 	//OLd table hasn't been resized yet so use newTable number
 	printBlobTable(oldBT_in, newNum_in);
-	printBlockList(blockList, taken);
-	orphanCare(oldBT_in, oldNum_in, newBT_in, newNum_in, blockList, taken, crossCount_in);
+	orphanCare(oldBT_in, oldNum_in, newBT_in, newNum_in, crossCount_in);
 	printBlobTable(oldBT_in, oldNum_in);
 	printCrossCount(crossCount_in);
 
@@ -128,7 +166,7 @@ long get_nanos()
 
 int main()
 {
-	//Temp index from sensor (volatile eventially)
+	//Temp index from sensor (volatile eventually)
 	int temp[ROW][COL];
 	//printTestMat(temp);
 
@@ -140,13 +178,23 @@ int main()
 	short newNum = 0;
 
 	//Distance matrix
-	struct blob dist[(BLOBLIM * BLOBLIM)] = {0};
+	struct blob dist[(BLOBLIM * BLOBLIM)] = { 0 };
 	short count = 0;
+
 	//crossCount deals with enter/exit crossings
 	short crossCount = 0;
+
 	//this is the actually # of people in the room
 	short numPeeps = 0;
 
+	
+	processWalkthrough(temp, oldBT, oldNum, newBT, newNum, dist, count, crossCount, 5, 6);
+
+
+
+
+
+	//
 	//TODO: !!!!: Regular C doesn't do the generic function pointers so I cannot easily make this a function, sad bruh
 	//Time Performance put code to evaluate in here, put code between start and stop. Does code 100 times and computes average ns
 	long duration = 0;
@@ -159,6 +207,7 @@ int main()
 		
 		singleFrame(temp, newNum, newBT);
 		updateLocs(oldBT, oldNum, newBT, newNum, dist, count, crossCount);
+		printTree(ROOT);
 
 		//Time Test End
 		long stop = get_nanos();
@@ -170,4 +219,5 @@ int main()
 	printf("The Code took: %ld ns to complete", duration);
 
 	//TODO use valgrind on slimmed version of program to get MEM performance
+	
 }
