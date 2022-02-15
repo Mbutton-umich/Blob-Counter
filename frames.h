@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: frames.h
-Version: 1.2  RBT Update
-Updated: MON14FEB22
+Version: 1.4  Sequence Tested
+Updated: TUE15FEB22
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -20,7 +20,6 @@ OPTIM: is a location that is marked for potential improvement
 #include <math.h>
 
 #include "rBT.h"
-
 
 #define NEIGHNUM 8
 #define LABELLEN 3
@@ -61,7 +60,7 @@ void fillDist(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in
 void matchShortest(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in);
 //Takes care of cases when the new Blob Table is smaller or larger than the old, determines enters/exits
 void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, short& crossCount_in);
-//MAnages the full process of updating the old Blob Table to the new Blob Table and counts enters/exits happening during this update
+//Manages the full process of updating the old Blob Table to the new Blob Table and counts enters/exits happening during this update
 short updateLocs(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short& crossCount_in);
 
 #endif
