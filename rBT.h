@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: rBT.h
-Version: 1.2  RBT Update
-Updated: MON14FEB22
+Version: 1.4  Sequence Tested
+Updated: TUE15FEB22
 
 This is a header ofr a Red-Black Tree that will be used for the block list in the frames program,
 makes checking already used blobs when picking matches or finding orphans faster
