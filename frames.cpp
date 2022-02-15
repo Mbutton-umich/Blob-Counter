@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: frames.cpp
-Version: 1.2  RBT Update
-Updated: MON14FEB22
+Version: 1.4  Sequence Tested
+Updated: TUE15FEB22
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -9,6 +9,10 @@ TODO: is a location I need to come back for some reason
 OPTIM: is a location that is marked for potential improvement
 !!!!: is a location with specific and dangerous importance
 */
+
+//TODO: Refactor this to use extern globals so I'm not passing shit around and don't have mile long function parameters
+//use the rBT as an example for the extern variable declare and init.
+
 
 #include "frames.h"
 
@@ -207,6 +211,7 @@ void matchShortest(float oldTable_in[][COORDDIM], short& oldNum_in,float newTabl
 	}
 }
 
+//Takes care of cases when the new Blob Table is smaller or larger than the old, determines enters/exits
 void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, short& crossCount_in)
 {
 	//Distances to entrance and exit lines
@@ -232,7 +237,7 @@ void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_
 				oldTable_in[oldIndex][1] = newTable_in[m][1];
 				//Now comptute the enter/exit distance on the newly registered blob and increment the crossCount
 				entrDist = vertDistCalc(oldTable_in[oldIndex][0], 0);
-				exitDist = vertDistCalc(oldTable_in[oldIndex][0], 31);
+				exitDist = vertDistCalc(oldTable_in[oldIndex][0], ROW);
 				if (entrDist <= exitDist)
 				{
 					++crossCount_in;
@@ -249,23 +254,28 @@ void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_
 	//Old blobs disappeared
 	else if (oldNum_in > newNum_in)
 	{
+		//If a blob gets taken out of the table, we have to adjust the key we 
+		//are searching for accordingly
+		short delOffset = 0;
 		//Loop through this larger old table
-		for (short m = 0; m < oldNum_in; ++m)
+		for (short n = 0; n < oldNum_in; ++n)
 		{
 			//Check if entry is in the block list via tree search
-			short key = -(m + 1);
+			short key = -(n + 1);
 			if (!contains(ROOT, key))
 			{
+				//Adjusted index taking into account deletions happeneing before
+				short adjst = n + delOffset;
 				insert(key);
-				entrDist = vertDistCalc(oldTable_in[m][0], 0);
-				exitDist = vertDistCalc(oldTable_in[m][0], 31);
+				entrDist = vertDistCalc(oldTable_in[adjst][0], 0);
+				exitDist = vertDistCalc(oldTable_in[adjst][0], ROW);
+				--delOffset;
 				//Shift out the expired blob
-				for (short p = m; p < oldNum_in; ++p)
+				for (short p = adjst; p < oldNum_in; ++p)
 				{
 					oldTable_in[p][0] = oldTable_in[p + 1][0];
 					oldTable_in[p][1] = oldTable_in[p + 1][1];
 				}
-				//Invert the crossCount increments
 				if (entrDist <= exitDist)
 				{
 					--crossCount_in;
@@ -312,10 +322,25 @@ short updateLocs(float oldTable_in[][COORDDIM], short &oldNum_in, float newTable
 
 	//Clear stuff out for the next frame
 	reset(newNum_in, count_in);
-	//Determine number of entrances or exits after this update
-	
-	short dPeeps = (crossCount_in - oldNum_in) / 2;
-	//Adjust the cross count
-	crossCount_in += 2*dPeeps;
+	/*Actually counting exits and exits is somewhat hard to think about
+	*!!!!: I don't know how robust this setup is
+	*First get the sign of crossCount, this sign is basically the direction of net exits (-) and entrances (+)
+	*Then we compute this term diff. Knowing that every blob we are currently tracking must have crossed one time. We subtract
+	*the number of tracked blobs from the magnitude of the cross count. This term can be either negative or positve.
+	*It is negative only when we have lots of blobs cancelling eachother out, so we have several people simultaneously exiting and entering
+	*at one time. In the positive case that mean we had lots of crossings and are only tracking a few blobs.
+	*This second case is more interesting to us because it is a roundabout way of knowing when stuff has actually left the door threshold that 
+	*is to say our scan frame. If sign was the direction, than diff is the magnitude of net exits and entrances.
+	*So in the negaive case we just zero it out, because there isn't enough stuff leaving the frame that we can determine is an entrance or exit
+	*Once we have diff we increment or decrement the cross count based on the sign direction. We do this because the cross count is 
+	*only meant to track people in the process of passing through the door, once they've made a full exit or entrance we can cut their 
+	*crossings out of this running sum. Finally dPeeps is the net change to occupancy for this frame update, we take into account sign 
+	*to decipher enters versus exits, and we divide by 2 because a blob must cross both the enter and exit line once to use the door.
+	*/
+	short sign = (crossCount_in < 0) ? -1 : 1;
+	short diff = (sign * crossCount_in) - oldNum_in;
+	diff = (diff < 0) ? 0 : diff;
+	crossCount_in += -sign*diff;
+	short dPeeps = sign*diff / 2;
 	return dPeeps;
 }
