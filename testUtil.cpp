@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: testUtil.cpp
-Version: 1.2  RBT Update
-Updated: MON14FEB22
+Version: 1.4  Sequence Tested
+Updated: TUE15FEB22
 
 testUtil functions as a test bench for the frames code. Checking inputs, outputs, and performance time. Also has installation calculation functions.
 
@@ -28,6 +28,7 @@ void readTestMat(int myNums_in[][COLS], int testNum_in)
 		{
 			fscanf(fp, " %d", &myNums_in[i][j]);
 		}
+	fclose(fp);
 }
 
 //Prints a test matrix for verification
@@ -45,7 +46,6 @@ void printTestMat(int myNums_in[][COLS])
 	printf("\n");
 		
 }
-
 
 //Prints the Blob Table for a Single Frame
 void printBlobTable(const float blobTable_in[][COORDDIM], const short& numBlobs_in)
@@ -73,6 +73,12 @@ void printCrossCount(const short& crossCount_in)
 	printf("Current Cross Count: %i \n", crossCount_in);
 }
 
+
+void printNumPeep(const short& numPeeps_in)
+{
+	printf("\nThere are %i people inside the room!\n", numPeeps_in);
+}
+
 void recurPrintTree(struct node* node_in)
 {
 	if (node_in != NILL)
@@ -89,6 +95,7 @@ void printTree(struct node* node_in)
 	recurPrintTree(node_in);
 	printf("\n");
 }
+
 
 //Tests the RBT tree stuff
 void testTree()
@@ -156,7 +163,19 @@ void processWalkthrough(int temp_in[][COL], float oldBT_in[][COORDDIM], short& o
 	crossCount_in += dPeeps;
 }
 
-//Gets nanosecond system time (may not be actual system time)
+void frameSeqTest(int seqLen_in, int startNum_in, int temp_in[][COL],  float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short& crossCount_in, short& numPeeps_in)
+{
+	for (int i = startNum_in; i < (startNum_in + seqLen_in); ++i)
+	{
+		readTestMat(temp_in, i);
+		singleFrame(temp_in, newNum_in, newTable_in);
+		numPeeps_in += updateLocs(oldTable_in, oldNum_in, newTable_in, newNum_in, dist_in, count_in, crossCount_in);
+		printf("\nAfter Frame %i:", i);
+		printNumPeep(numPeeps_in);
+	}
+}
+
+//Gets nanosecond system time (may not be actual  time)
 long get_nanos() 
 {
 	struct timespec ts;
@@ -187,17 +206,12 @@ int main()
 	//this is the actually # of people in the room
 	short numPeeps = 0;
 
-	
-	processWalkthrough(temp, oldBT, oldNum, newBT, newNum, dist, count, crossCount, 5, 6);
-
-
-
-
+	frameSeqTest(9, 0, temp, oldBT, oldNum, newBT, newNum, dist, count, crossCount, numPeeps);
 
 	//
 	//TODO: !!!!: Regular C doesn't do the generic function pointers so I cannot easily make this a function, sad bruh
 	//Time Performance put code to evaluate in here, put code between start and stop. Does code 100 times and computes average ns
-	long duration = 0;
+	/*long duration = 0;
 	for (int i = 0; i < 100; ++i)
 	{
 		long start = get_nanos();
@@ -219,5 +233,5 @@ int main()
 	printf("The Code took: %ld ns to complete", duration);
 
 	//TODO use valgrind on slimmed version of program to get MEM performance
-	
+	*/
 }
