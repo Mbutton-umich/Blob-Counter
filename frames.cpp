@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: frames.cpp
-Version: 1.0  Beta
-Updated: FRI11FEB22
+Version: 1.2  RBT Update
+Updated: MON14FEB22
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -132,14 +132,6 @@ int distComp(const void *a,  const void *b)
 	return distA - distB;
 }
 
-//Comparator for qsort() for blockList
-int shortComp(const void* a, const void* b)
-{
-	const short aVal = *(short*)a;
-	const short bVal = *(short*)b;
-	return aVal - bVal;
-}
-
 //Finds and arranges intra-blob distance table in ascending order
 void fillDist(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in)
 {
@@ -158,41 +150,40 @@ void fillDist(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in
 }
 
 //Matches the new blobs with their closest old blobs and overwrites the old table
-void matchShortest(float oldTable_in[][COORDDIM], short& oldNum_in,float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short blockList_in[BLOBLIM], short& taken_in)
+void matchShortest(float oldTable_in[][COORDDIM], short& oldNum_in,float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in)
 {
-	/*TODO: OPTIM: !!!!: This is basically nearest neighbor, so O(N^2) where N is the size of the distance matrix...so O((NxM)^2) where N,M are the blob matrices
-	so worst case O(BLOBLIM^4)...FUCKING WRETCHED. I've tried looking up D&C for finding closest unique pairs of two sets, only seeing overly complex KD-Trees and Voronoi Diagrams
-	open to ideas on optimizing this luckily BLOBLIMIT is small
+	/*So at this point we have sorted the distance table, now we go through and pick distances that connect a new blob with its old counterpart
+	* Each time we pick a pair, we put both blobs into a RBT as an exclusion list to make sure we don't select another distance involving those 
+	* blobs again. Then when we go to the next shortest distance in the table we first check the tree (which is sorted and balanced by its nature)
+	* and use a binary tree search to verify that this next distance doesnt involve any priorly matched blobs
 	*/
+	//Bool to check that a new distance involves a pair of yet unused blobs
 	bool unique = true;
-	int minMatch;
-	//Find the minimum number of values to match
-	if (shortComp(&newNum_in, &oldNum_in) <= 0)
-	{
-		minMatch = newNum_in;
-	}
-	else
+	//The number of blobs to match, the min(old, new) blob table sizes
+	short minMatch;
+	if (oldNum_in < newNum_in)
 	{
 		minMatch = oldNum_in;
 	}
+	else
+	{
+		minMatch = newNum_in;
+	}
 	for (short k = 0; k < count_in; ++k)
 	{
-		for (short l = 0; l < taken_in; ++l)
+		/*Check that we haven't already found a shorter distance involving this node
+		*The excluson tree is filled somewhat awkwardly because I differentiate between old and new indices with a negative sign.
+		*So this exclusion tree is the set of all blobs for which we have already found a closest partner.
+		*Unfortunately due to zero indexing and there not being a -0 I have to put things into the blockList with a +1 offset
+		*so for example if old blob 0 and new blob 1 are deemed closest to eachother then the tree will contain {-1 2}
+		*/
+		if (!(contains(ROOT, -(dist_in[k].oldInd + 1)) || contains(ROOT, dist_in[k].newInd + 1)))
 		{
-			/*Check that we haven't already found a shorter distance involving this node
-			The block list is filled somewhat awkwardly because I differentiate between old and new indices with a negative sign.
-			So this block list is the set of all blobs for which we have already found a closest partner.
-			Unfortunately due to zero indexing and there not being a -0 I have to put things into the blockList with a +1 offset 
-			so for example if old blob 0 and new blob 1 are deemed closest to eachother then the block list will contain {-1 2}
-			*/
-			if (!(dist_in[k].oldInd + 1 == -blockList_in[l] || dist_in[k].newInd + 1 == blockList_in[l]))
-			{
-				unique = true;
-			}
-			else
-			{
-				unique = false;
-			}
+			unique = true;
+		}
+		else
+		{
+			unique = false;
 		}
 		//if we haven't already used either node we can overwrite the old table
 		if (unique)
@@ -202,51 +193,44 @@ void matchShortest(float oldTable_in[][COORDDIM], short& oldNum_in,float newTabl
 			//Overwrite the old table with correctly matched new table r and c
 			oldTable_in[dist_in[k].oldInd][0] = newTable_in[dist_in[k].newInd][0];
 			oldTable_in[dist_in[k].oldInd][1] = newTable_in[dist_in[k].newInd][1];
-			//add newly taken nodes to the blocklist negate matched old values as a trick to use one array to track used nodes
+			//Add newly updated blobs to the tree negating matched old values as a trick to use one tree
 			//!!!!: Careful of offset here built into the block list
-			blockList_in[taken_in] = -(dist_in[k].oldInd + 1);
-			blockList_in[taken_in + 1] = (dist_in[k].newInd + 1);
-			taken_in += 2;
+			insert(-(dist_in[k].oldInd + 1));
+			insert(dist_in[k].newInd + 1);
+			treeCount += 2;
 		}
-		//If the number of new points has been matched we are done
-		if ((taken_in/2) == minMatch)
+		//If we matched the required number of blobs we are done
+		if ((treeCount/2) == minMatch)
 		{
 			break;
 		}
 	}
 }
 
-void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, short blockList_in[BLOBLIM], short& taken_in, short& crossCount_in)
+void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, short& crossCount_in)
 {
-	//Distances to entrane and exit lines
+	//Distances to entrance and exit lines
 	float entrDist = 0;
 	float exitDist = 0;
-	//Old imdex for table, need this copy because I cannot overwrite it yet, more like a running copy representing the  actual old Table while it grows or shrinks
+	//Old iddex for table, need this copy because I cannot overwrite it yet, more like a running copy representing the  actual old Table while it grows or shrinks
 	short oldIndex = oldNum_in;
-	//Used for indexing into partitions of block list
-	short half = taken_in/2;
-
-	/*Sort the block list, remember the negatives are old table indices while postitives are new table indices. This simplifies finding the unmatched blobs 
-	!!!Dont forget the offset built into the block list
-	*/
-	qsort(blockList_in, taken_in, sizeof(blockList_in[0]), shortComp);
-
+	//Used for indexing into partitions of exclusion RBT
+	short half = treeCount/2;
+	//!!!!: Dont forget the offset built into the exclusion tree data entries, emember the negatives are old table indices while postitives are new table indices.
 	//New blobs appears, so the new Table is bigger
 	if (oldNum_in < newNum_in)
 	{
 		//Loop through this larger new table
 		for (short m = 0; m < newNum_in; ++m)
 		{
-			//Check if entry is in the block list via binary search only need to search top half of array
-			short* result;
+			//Check if entry is in the tree via binary search
 			short key = m + 1;
-			//!!!!: Visual Studio doesn't like the pointer math
-			result = (short*)bsearch(&key, blockList_in + half, taken_in, sizeof(blockList_in[0]), shortComp);
-			if (result == NULL)
+			if (!contains(ROOT, key))
 			{
+				insert(key);
 				oldTable_in[oldIndex][0] = newTable_in[m][0];
 				oldTable_in[oldIndex][1] = newTable_in[m][1];
-				//Noew comptute the enter/exit distance on the newly registered blob and increment the crossCount
+				//Now comptute the enter/exit distance on the newly registered blob and increment the crossCount
 				entrDist = vertDistCalc(oldTable_in[oldIndex][0], 0);
 				exitDist = vertDistCalc(oldTable_in[oldIndex][0], 31);
 				if (entrDist <= exitDist)
@@ -263,18 +247,16 @@ void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_
 		}
 	}
 	//Old blobs disappeared
-	if (oldNum_in > newNum_in)
+	else if (oldNum_in > newNum_in)
 	{
 		//Loop through this larger old table
 		for (short m = 0; m < oldNum_in; ++m)
 		{
-			//Check if entry is in the block list via binary search only need to search bottom half of array, negtive entries
-			short* result;
+			//Check if entry is in the block list via tree search
 			short key = -(m + 1);
-			//!!!!: Visual Studio doesn't like the pointer math
-			result = (short*)bsearch(&key, blockList_in, half, sizeof(blockList_in[0]), shortComp);
-			if (result == NULL)
+			if (!contains(ROOT, key))
 			{
+				insert(key);
 				entrDist = vertDistCalc(oldTable_in[m][0], 0);
 				exitDist = vertDistCalc(oldTable_in[m][0], 31);
 				//Shift out the expired blob
@@ -283,7 +265,6 @@ void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_
 					oldTable_in[p][0] = oldTable_in[p + 1][0];
 					oldTable_in[p][1] = oldTable_in[p + 1][1];
 				}
-
 				//Invert the crossCount increments
 				if (entrDist <= exitDist)
 				{
@@ -307,6 +288,16 @@ void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_
 	return;
 }
 
+void reset(short& newNum_in, short& count_in)
+{
+	//Set the new table back to empty
+	newNum_in = 0;
+	//Set the  destance table back to empty
+	count_in = 0;
+	//reset the tree
+	destroyTree(ROOT);
+}
+
 //Does the comparisons between old  and new frames
 short updateLocs(float oldTable_in[][COORDDIM], short &oldNum_in, float newTable_in[][COORDDIM], short &newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in,  short& crossCount_in)
 {	
@@ -314,14 +305,15 @@ short updateLocs(float oldTable_in[][COORDDIM], short &oldNum_in, float newTable
 	
 	//The block list keeps track of which nodes we already found a short distance between. Used to prevent selecting two short distances that repeated involve the same blobs
 	//Must be as large as possibly two full Blob Tables to track old and new indices
-	short blockList[2 * BLOBLIM] = { 0 };
-	//Taken tracks the block list size
-	short taken = 0;
-	matchShortest(oldTable_in, oldNum_in, newTable_in, newNum_in, dist_in, count_in, blockList, taken);
+	initTree();
+	matchShortest(oldTable_in, oldNum_in, newTable_in, newNum_in, dist_in, count_in);
 
-	orphanCare(oldTable_in, oldNum_in, newTable_in, newNum_in, blockList, taken, crossCount_in);
+	orphanCare(oldTable_in, oldNum_in, newTable_in, newNum_in, crossCount_in);
 
+	//Clear stuff out for the next frame
+	reset(newNum_in, count_in);
 	//Determine number of entrances or exits after this update
+	
 	short dPeeps = (crossCount_in - oldNum_in) / 2;
 	//Adjust the cross count
 	crossCount_in += 2*dPeeps;
