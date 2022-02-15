@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: testUtil.h
-Version: 1.2  RBT Update
-Updated: MON14FEB22
+Version: 1.4  Sequence Tested
+Updated: TUE15FEB22
 
 testUtil functions as a test bench for the frames code. Checking inputs, outputs, and performance time. Also has installation calculation functions.
 
@@ -17,7 +17,6 @@ OPTIM: is a location that is marked for potential improvement
 #include "rBT.h"
 #include "frames.h"
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h> //For timing performance
@@ -25,8 +24,6 @@ OPTIM: is a location that is marked for potential improvement
 //!!!!: Changed ROW COL for testing output
 #define ROWS 9
 #define COLS 9
-
-
 
 //Reads in test matrices from a folder named "testMats" inside program directory, where files are named test#.txt, where testNum is #
 void readTestMat(int myNums_in[][COLS], int testNum_in);
@@ -38,6 +35,8 @@ void printBlobTable(const float blobTable_in[][COORDDIM], const short& numBlobs_
 void printDistTable(const struct blob dist_in[(BLOBLIM * BLOBLIM)], const short& count_in);
 //Prints the tally of crossings
 void printCrossCount(const short& crossCount_in);
+//Prints the number of people inside the room
+void printNumPeep(const short& numPeeps_in);
 //Recursively print out tree contents
 void recurPrintTree(struct node* node_in);
 //Print the whole tree
@@ -46,6 +45,8 @@ void printTree(struct node* node_in);
 void testTree();
 //Walkthrough of the two frame update process
 void processWalkthrough(int temp_in[][COL], float oldBT_in[][COORDDIM], short& oldNum_in, float newBT_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short& crossCount_in, int oldTestMat, int newTestMat);
+//Does up to a 10 test frame simulation, prints out roomoccupancy after each frame
+void frameSeqTest(int seqLen_in, int startNum_in, int temp_in[][COL], float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short& crossCount_in, short& numPeeps_in);
 //Gets nanosecond system time (may not be actual system time)
 long get_nanos();
 
