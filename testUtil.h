@@ -1,6 +1,7 @@
 /*EECS 300 Final Project Code Team 11: testUtil.h
-Version: 1.4  Sequence Tested
-Updated: TUE15FEB22
+Version: 1.6 Cleaned for Speed Test
+Updated: FRI19FEB22
+
 
 testUtil functions as a test bench for the frames code. Checking inputs, outputs, and performance time. Also has installation calculation functions.
 
@@ -14,39 +15,34 @@ OPTIM: is a location that is marked for potential improvement
 #define _CRT_SECURE_NO_WARNINGS
 #define testUtil_H
 
-#include "rBT.h"
 #include "frames.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h> //For timing performance
 
-//!!!!: Changed ROW COL for testing output
-#define ROWS 9
-#define COLS 9
-
 //Reads in test matrices from a folder named "testMats" inside program directory, where files are named test#.txt, where testNum is #
-void readTestMat(int myNums_in[][COLS], int testNum_in);
+void readTestMat(int myNums_in[][COL], int testNum_in);
 //Prints a test matrix for verifiction
-void printTestMat(int myNums_in[][COLS]);
+void printTestMat(int myNums_in[][COL]);
+//Swaps new blob table into old, useful for testing single frame
+void blobSwap();
 //Prints the Blob Table for a Single Frame
-void printBlobTable(const float blobTable_in[][COORDDIM], const short& numBlobs_in);
+void printBlobTable(const struct blobElem blobTable_in[BLOBLIM], const short blobNum_in);
 //Prints the Distance Table for old and new frames
-void printDistTable(const struct blob dist_in[(BLOBLIM * BLOBLIM)], const short& count_in);
+void printDistTable();
 //Prints the tally of crossings
-void printCrossCount(const short& crossCount_in);
+void printCrossCount();
 //Prints the number of people inside the room
 void printNumPeep(const short& numPeeps_in);
-//Recursively print out tree contents
-void recurPrintTree(struct node* node_in);
-//Print the whole tree
-void printTree(struct node* node_in);
-//Tests the RBT tree stuff
-void testTree();
 //Walkthrough of the two frame update process
-void processWalkthrough(int temp_in[][COL], float oldBT_in[][COORDDIM], short& oldNum_in, float newBT_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short& crossCount_in, int oldTestMat, int newTestMat);
+void processWalkthrough(int temp_in[][COL], int oldTestNum_in, int newTestNum_in);
 //Does up to a 10 test frame simulation, prints out roomoccupancy after each frame
-void frameSeqTest(int seqLen_in, int startNum_in, int temp_in[][COL], float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in, short& crossCount_in, short& numPeeps_in);
+void frameSeqTest(int seqLen_in, int startNum_in, int temp_in[][COL], short& peepNum_in);
+//Takes in a sequence of test matrices and puts them into C form to put into headerfile to loaod onto the ESP32
+void printTestMats2HeaderForm(int seqLen_in, int startNum_in);
+//Gives you install dimensions for a given door width
+void installDims();
 //Gets nanosecond system time (may not be actual system time)
 long get_nanos();
 
