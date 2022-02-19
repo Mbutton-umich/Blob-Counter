@@ -1,6 +1,7 @@
 /*EECS 300 Final Project Code Team 11: frames.cpp
-Version: 1.4  Sequence Tested
-Updated: TUE15FEB22
+Version: 1.6 Cleaned for Speed Test
+Updated: FRI19FEB22
+
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -16,6 +17,21 @@ OPTIM: is a location that is marked for potential improvement
 
 #include "frames.h"
 
+//Initialize New Blob Table
+struct blobElem newBT[BLOBLIM];
+short newNum = 0;
+
+//Initialize Old Blob Table
+struct blobElem oldBT[BLOBLIM];
+short oldNum = 0;
+
+//Initialize the Distance Table
+struct distElem distT[(BLOBLIM * BLOBLIM)];
+short distNum = 0;
+
+//Initialize the Cross Count
+short crossNum = 0;
+
 //Identifies if a potential island is valid (i.e only ones, no edges, nothing visited prior)
 int validLoc(int temp_in[][COL], bool visited_in[][COL], short row_in, short col_in)
 {
@@ -27,20 +43,17 @@ int validLoc(int temp_in[][COL], bool visited_in[][COL], short row_in, short col
 }
 
 //Depth first search for array islands
-void DFS(int temp_in[][COL], bool visited_in[][COL], float blobLabel_in[LABELLEN], short row_in, short col_in)
+void DFS(int temp_in[][COL], bool visited_in[][COL], struct islandLabel& islandLabel_in,const short row_in, const short col_in)
 {
 	//Set current pixel as visited
 	visited_in[row_in][col_in] = true;
-
 	//Each time DFS is called island size increases, add to row column sums
-	++blobLabel_in[0];
-	blobLabel_in[1] += row_in;
-	blobLabel_in[2] += col_in;
-
+	++islandLabel_in.size;
+	islandLabel_in.r += row_in;
+	islandLabel_in.c += col_in;
 	//Array neighbor direction pairs for optimal looping
 	static short rowInd[] = { -1, -1, -1,  0, 0,  1, 1, 1 };
 	static short colInd[] = { -1,  0,  1, -1, 1, -1, 0, 1 };
-	
 	/*Loop recursively through each neighbor
 	OPTIM: !!!!: The recursion may overfill the stack just keep in mind for large blobs make test case
 	*/
@@ -50,45 +63,47 @@ void DFS(int temp_in[][COL], bool visited_in[][COL], float blobLabel_in[LABELLEN
 		short newCol = col_in + colInd[k];
 		if (validLoc(temp_in, visited_in, newRow, newCol))
 		{
-			DFS(temp_in, visited_in, blobLabel_in, newRow, newCol);
+			DFS(temp_in, visited_in, islandLabel_in, newRow, newCol);
 		}
 	}
 }
 
 //Process function for single frame
-void singleFrame(int temp_in[][COL], short &numBlobs_in, float blobTable_in[][COORDDIM])
+void singleFrame(int temp_in[][COL])
 {
-	numBlobs_in = 0;
+	newNum = 0;
 	//Make visited matrix
 	bool visited[ROW][COL] = { 0 };
-
 	/*Label for DFS to report size and center r,c coordinate
 	{size, row (sum/center), col (sum/center)}
 	*/
-	float blobLabel[LABELLEN] = { 0 };
+	struct islandLabel freshLabel = { 0, 0, 0 };
 	for (short r = 0; r < ROW; ++r)
 		for (short c = 0; c < COL; ++c)
 			//Loop through every pixel, if not yet visited and hot (1) then do a DFS
 			if ((temp_in[r][c]==1) && (visited[r][c]==0))
 			{
-				DFS(temp_in, visited, blobLabel, r, c);
+				DFS(temp_in, visited, freshLabel, r, c);
 				//Increment number of blobs
 				/*
 				OPTIM: To descriminate based on blob size (May not be issue)
 				minBlobSize = x
-				if(blobLabel[0] < x)
+				if(freshLabel.size < x)
 				{
-
 				}
 				*/
-				++numBlobs_in;
+				++newNum;
 				//Add blob location to table
-				blobTable_in[numBlobs_in - 1][0] = blobLabel[1] / blobLabel[0];
-				blobTable_in[numBlobs_in - 1][1] = blobLabel[2] / blobLabel[0];
+				newBT[newNum - 1].r = freshLabel.r / freshLabel.size;
+				newBT[newNum - 1].c = freshLabel.c / freshLabel.size;
 				//Reset label to zero for next island
-				for (short k = 0; k < LABELLEN; ++k)
+				freshLabel.r = 0;
+				freshLabel.c = 0;
+				freshLabel.size = 0;
+				//If we reach our blob limit break out and just exit
+				if (newNum == BLOBLIM)
 				{
-					blobLabel[k] = 0;
+					return;
 				}
 			}
 }
@@ -112,7 +127,7 @@ void arr2Bin(int temp_in[][COL])
 }
 
 //Calculates distance between two points
-float distCalc(float r1_in, float c1_in, float r2_in, float c2_in)
+float distCalc(const float r1_in, const float c1_in, const float r2_in, const float c2_in)
 {
 	float dr = r2_in - r1_in;
 	float dc = c2_in - c1_in;
@@ -120,208 +135,180 @@ float distCalc(float r1_in, float c1_in, float r2_in, float c2_in)
 	return (dr * dr) + (dc * dc);
 }
 
-float vertDistCalc(float r1_in, float r2_in)
+float vertDistCalc(const float r1_in, const float r2_in)
 {
-	return fabs(r1_in - r2_in);
+	return fabs((double)(r1_in - r2_in));
 }
 
 //Comparator for distance matrix computation using qsort()
 int distComp(const void *a,  const void *b)
 {
 	//qsort() must have that function header, so we have to cast these 'void pointers' into 'blob pointers' to acccess inner elements
-	const float distA = ((blob*)a)->dist;
-	const float distB = ((blob*)b)->dist;
+	const float distA = ((distElem*)a)->dist;
+	const float distB = ((distElem*)b)->dist;
 	//A negative result means row A comes before row B
-	//!!!!: Implicit conversion from float to int must not change sign here, there is a warning!
-	return distA - distB;
+	//Explicit casr  from float to int, comparator must return an int
+	return (int)(distA - distB);
 }
 
 //Finds and arranges intra-blob distance table in ascending order
-void fillDist(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in)
+void fillDist()
 {
-	for (int i = 0; i < oldNum_in; ++i)
+	for (int i = 0; i < oldNum; ++i)
 	{
-		for (int j = 0; j < newNum_in; ++j)
+		for (int j = 0; j < newNum; ++j)
 		{
-			dist_in[count_in].dist = distCalc(oldTable_in[i][0], oldTable_in[i][1], newTable_in[j][0], newTable_in[j][1]);
-			dist_in[count_in].oldInd = i;
-			dist_in[count_in].newInd = j;
-			++count_in;
+			distT[distNum].dist = distCalc(oldBT[i].r, oldBT[i].c, newBT[j].r, newBT[j].c);
+			distT[distNum].oldInd = i;
+			distT[distNum].newInd = j;
+			++distNum;
 		}
 	}
 	//O(log(N*M)) to sort our distances for a N and M sized new and old tables
-	qsort(dist_in, count_in, sizeof(dist_in[0]), distComp);
+	qsort(distT, distNum, sizeof(distT[0]), distComp);
 }
 
 //Matches the new blobs with their closest old blobs and overwrites the old table
-void matchShortest(float oldTable_in[][COORDDIM], short& oldNum_in,float newTable_in[][COORDDIM], short& newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in)
+void matchShortest()
 {
 	/*So at this point we have sorted the distance table, now we go through and pick distances that connect a new blob with its old counterpart
-	* Each time we pick a pair, we put both blobs into a RBT as an exclusion list to make sure we don't select another distance involving those 
-	* blobs again. Then when we go to the next shortest distance in the table we first check the tree (which is sorted and balanced by its nature)
-	* and use a binary tree search to verify that this next distance doesnt involve any priorly matched blobs
+	* Each time we pick a pair, we mark it as matched in the table where it came from
 	*/
-	//Bool to check that a new distance involves a pair of yet unused blobs
-	bool unique = true;
+	short matchNum = 0;
 	//The number of blobs to match, the min(old, new) blob table sizes
 	short minMatch;
-	if (oldNum_in < newNum_in)
+	if (oldNum < newNum)
 	{
-		minMatch = oldNum_in;
+		minMatch = oldNum;
 	}
 	else
 	{
-		minMatch = newNum_in;
+		minMatch = newNum;
 	}
-	for (short k = 0; k < count_in; ++k)
+	//Loop through the Distance Table
+	for (short k = 0; k < distNum; ++k)
 	{
-		/*Check that we haven't already found a shorter distance involving this node
-		*The excluson tree is filled somewhat awkwardly because I differentiate between old and new indices with a negative sign.
-		*So this exclusion tree is the set of all blobs for which we have already found a closest partner.
-		*Unfortunately due to zero indexing and there not being a -0 I have to put things into the blockList with a +1 offset
-		*so for example if old blob 0 and new blob 1 are deemed closest to eachother then the tree will contain {-1 2}
-		*/
-		if (!(contains(ROOT, -(dist_in[k].oldInd + 1)) || contains(ROOT, dist_in[k].newInd + 1)))
+		//If we matched the required number of blobs we are done, or if the distance goes beyond the indra blob limit 
+		if ((matchNum / 2) == minMatch || distT[k].dist > INTRADISTLIM)
 		{
-			unique = true;
+			return;
 		}
-		else
+		//Check that we haven't already found a shorter distance involving this distance table pair
+		if(!oldBT[distT[k].oldInd].matched && !newBT[distT[k].newInd].matched)
 		{
-			unique = false;
-		}
-		//if we haven't already used either node we can overwrite the old table
-		if (unique)
-		{
-			//reset the unique check
-			unique = false;
-			//Overwrite the old table with correctly matched new table r and c
-			oldTable_in[dist_in[k].oldInd][0] = newTable_in[dist_in[k].newInd][0];
-			oldTable_in[dist_in[k].oldInd][1] = newTable_in[dist_in[k].newInd][1];
-			//Add newly updated blobs to the tree negating matched old values as a trick to use one tree
-			//!!!!: Careful of offset here built into the block list
-			insert(-(dist_in[k].oldInd + 1));
-			insert(dist_in[k].newInd + 1);
-			treeCount += 2;
-		}
-		//If we matched the required number of blobs we are done
-		if ((treeCount/2) == minMatch)
-		{
-			break;
+			//Overwrite the old table with correctly matched new table r and c, 
+			oldBT[distT[k].oldInd].r = newBT[distT[k].newInd].r;
+			oldBT[distT[k].oldInd].c = newBT[distT[k].newInd].c;
+			//Mark them in their tables as matched
+			oldBT[distT[k].oldInd].matched = true;
+			newBT[distT[k].newInd].matched = true;
+			matchNum += 2;
 		}
 	}
 }
 
 //Takes care of cases when the new Blob Table is smaller or larger than the old, determines enters/exits
-void orphanCare(float oldTable_in[][COORDDIM], short& oldNum_in, float newTable_in[][COORDDIM], short& newNum_in, short& crossCount_in)
+void orphanCare()
 {
 	//Distances to entrance and exit lines
 	float entrDist = 0;
 	float exitDist = 0;
 	//Old iddex for table, need this copy because I cannot overwrite it yet, more like a running copy representing the  actual old Table while it grows or shrinks
-	short oldIndex = oldNum_in;
-	//Used for indexing into partitions of exclusion RBT
-	short half = treeCount/2;
-	//!!!!: Dont forget the offset built into the exclusion tree data entries, emember the negatives are old table indices while postitives are new table indices.
+	short oldIndex = oldNum;
 	//New blobs appears, so the new Table is bigger
-	if (oldNum_in < newNum_in)
+
+	//Now loop through the old table, the case of old blob disappearing ill occur here as an unmatched entry
+	//If a blob gets taken out of the table, we have to adjust what index we are calculating distance for
+	short delOffset = 0;
+	//Loop through this larger old table
+	for (short n = 0; n < oldNum; ++n)
 	{
-		//Loop through this larger new table
-		for (short m = 0; m < newNum_in; ++m)
+		//Adjusted index taking into account prior deletions
+		short adjst = n + delOffset;
+		if (!oldBT[adjst].matched)
 		{
-			//Check if entry is in the tree via binary search
-			short key = m + 1;
-			if (!contains(ROOT, key))
+			entrDist = vertDistCalc(oldBT[adjst].r, 0);
+			exitDist = vertDistCalc(oldBT[adjst].r, ROW);
+			--delOffset;
+			//Shift out the expired blob
+			for (short p = adjst; p < oldNum; ++p)
 			{
-				insert(key);
-				oldTable_in[oldIndex][0] = newTable_in[m][0];
-				oldTable_in[oldIndex][1] = newTable_in[m][1];
-				//Now comptute the enter/exit distance on the newly registered blob and increment the crossCount
-				entrDist = vertDistCalc(oldTable_in[oldIndex][0], 0);
-				exitDist = vertDistCalc(oldTable_in[oldIndex][0], ROW);
-				if (entrDist <= exitDist)
-				{
-					++crossCount_in;
-				}
-				else
-				{
-					--crossCount_in;
-				}
-				//Extend size of the old Table
-				++oldIndex;
+				oldBT[p].r = oldBT[p + 1].r;
+				oldBT[p].c = oldBT[p + 1].c;
 			}
+			if (entrDist < exitDist)
+			{
+				--crossNum;
+			}
+			else
+			{
+				++crossNum;
+			}
+			//shorten the size of the old table
+			//TODO can remove this?
+			--oldIndex;
+		}
+		else
+		{
+			//Undo matchings
+			oldBT[n].matched = false;
 		}
 	}
-	//Old blobs disappeared
-	else if (oldNum_in > newNum_in)
+	//First loop through the new table, the case of new blob apearing will occur here as an unmatched entry
+	for (short m = 0; m < newNum; ++m)
 	{
-		//If a blob gets taken out of the table, we have to adjust the key we 
-		//are searching for accordingly
-		short delOffset = 0;
-		//Loop through this larger old table
-		for (short n = 0; n < oldNum_in; ++n)
+		//If something is unmatched that means we must deal with it
+		if (!newBT[m].matched)
 		{
-			//Check if entry is in the block list via tree search
-			short key = -(n + 1);
-			if (!contains(ROOT, key))
+			oldBT[oldIndex].r = newBT[m].r;
+			oldBT[oldIndex].c = newBT[m].c;
+			//Now comptute the enter/exit distance on the newly registered blob and increment the crossCount
+			entrDist = vertDistCalc(oldBT[oldIndex].r, 0);
+			exitDist = vertDistCalc(oldBT[oldIndex].r, ROW);
+			if (entrDist < exitDist)
 			{
-				//Adjusted index taking into account deletions happeneing before
-				short adjst = n + delOffset;
-				insert(key);
-				entrDist = vertDistCalc(oldTable_in[adjst][0], 0);
-				exitDist = vertDistCalc(oldTable_in[adjst][0], ROW);
-				--delOffset;
-				//Shift out the expired blob
-				for (short p = adjst; p < oldNum_in; ++p)
-				{
-					oldTable_in[p][0] = oldTable_in[p + 1][0];
-					oldTable_in[p][1] = oldTable_in[p + 1][1];
-				}
-				if (entrDist <= exitDist)
-				{
-					--crossCount_in;
-				}
-				else
-				{
-					++crossCount_in;
-				}
-				//shorten the size of the old table
-				--oldIndex;
+				++crossNum;
 			}
+			else
+			{
+				--crossNum;
+			}
+			//Extend size of the old Table
+			++oldIndex;
+		}
+		else
+		{
+			//Unmatch everything in the table matched prior
+			newBT[m].matched = false;
 		}
 	}
-	else
-	{
-		return;
-	}
-	//Resize the oldTable finally
-	oldNum_in = newNum_in;
+	//Resize the Old Table finally
+	oldNum = newNum;
 	return;
 }
 
-void reset(short& newNum_in, short& count_in)
+void reset()
 {
 	//Set the new table back to empty
-	newNum_in = 0;
+	newNum = 0;
 	//Set the  destance table back to empty
-	count_in = 0;
-	//reset the tree
-	destroyTree(ROOT);
+	distNum = 0;
 }
 
 //Does the comparisons between old  and new frames
-short updateLocs(float oldTable_in[][COORDDIM], short &oldNum_in, float newTable_in[][COORDDIM], short &newNum_in, struct blob dist_in[(BLOBLIM * BLOBLIM)], short& count_in,  short& crossCount_in)
+short updateLocs()
 {	
-	fillDist(oldTable_in, oldNum_in, newTable_in, newNum_in, dist_in, count_in);
+	//Fill the Distance Table
+	fillDist();
 	
 	//The block list keeps track of which nodes we already found a short distance between. Used to prevent selecting two short distances that repeated involve the same blobs
 	//Must be as large as possibly two full Blob Tables to track old and new indices
-	initTree();
-	matchShortest(oldTable_in, oldNum_in, newTable_in, newNum_in, dist_in, count_in);
+	matchShortest();
 
-	orphanCare(oldTable_in, oldNum_in, newTable_in, newNum_in, crossCount_in);
+	orphanCare();
 
 	//Clear stuff out for the next frame
-	reset(newNum_in, count_in);
+	reset();
 	/*Actually counting exits and exits is somewhat hard to think about
 	*!!!!: I don't know how robust this setup is
 	*First get the sign of crossCount, this sign is basically the direction of net exits (-) and entrances (+)
@@ -337,10 +324,10 @@ short updateLocs(float oldTable_in[][COORDDIM], short &oldNum_in, float newTable
 	*crossings out of this running sum. Finally dPeeps is the net change to occupancy for this frame update, we take into account sign 
 	*to decipher enters versus exits, and we divide by 2 because a blob must cross both the enter and exit line once to use the door.
 	*/
-	short sign = (crossCount_in < 0) ? -1 : 1;
-	short diff = (sign * crossCount_in) - oldNum_in;
+	short sign = (crossNum < 0) ? -1 : 1;
+	short diff = (sign * crossNum) - oldNum;
 	diff = (diff < 0) ? 0 : diff;
-	crossCount_in += -sign*diff;
+	crossNum += -sign*diff;
 	short dPeeps = sign*diff / 2;
 	return dPeeps;
 }
