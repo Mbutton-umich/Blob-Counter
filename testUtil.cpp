@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: testUtil.cpp
-Version: 1.6 Cleaned for Speed Test
-Updated: FRI19FEB22
+Version: 3.0 Done Deal
+Updated: FRI26FEB22
 
 testUtil functions as a test bench for the frames code. Checking inputs, outputs, and performance time. Also has installation calculation functions.
 
@@ -12,19 +12,20 @@ OPTIM: is a location that is marked for potential improvement
 #define _CRT_SECURE_NO_WARNINGS
 #include "testUtil.h"
 
+//Temp index from sensor (volatile eventually)
+short peepNum = 0;
+bool temp[ROW][COL];
+//this is the actually # of people in the room
+
 int main()
 {
-	//Temp index from sensor (volatile eventually)
-	int temp[ROW][COL];
+	
 	//printTestMat(temp);
-
-	//this is the actually # of people in the room
-	short peepNum = 0;
-
 	//Currently setup for test folder 1.6 where there are nine files it goes through, make sure they are in the same folder as this program running
-	//frameSeqTest(8, 0, temp, peepNum);
-	//printTestMats2HeaderForm(3, 0);
-	installDims();
+	//processWalkthrough( temp, 3, 4);
+	//frameSeqTest(10, 0, temp, peepNum);
+	printTestMats2HeaderForm(10, 0);
+	//installDims();
 	//
 	//TODO: !!!!: Regular C doesn't do the generic function pointers so I cannot easily make this a function, sad bruh
 	//Time Performance put code to evaluate in here, put code between start and stop. Does code 100 times and computes average ns
@@ -54,16 +55,16 @@ int main()
 }
 
 //Reads in test matrices from a folder named "testMats", where files are named test#.txt and testNum is #
-void readTestMat(int myNums_in[][COL], int testNum_in)
+void readTestMat(bool myNums_in[][COL], int testNum_in)
 {
 	char  fileName[] = ".\\testMats\\test#.txt";
 	fileName[15] = '0' + testNum_in;
 	FILE* fp;
 	fp = fopen(fileName, "r");
-	for (int i = 0; i <= 9; i++)
-		for (int j = 0;j<9 ; j++)
+	for (int i = 0; i < ROW; i++)
+		for (int j = 0; j < COL; j++)
 		{
-			fscanf(fp, " %d", &myNums_in[i][j]);
+			fscanf(fp, " %i", &myNums_in[i][j]);
 		}
 	fclose(fp);
 }
@@ -116,9 +117,9 @@ void printDistTable()
 	printf("\n");
 }
 
-void printCrossCount()
+void printDeltaPeeps()
 {
-	printf("Current Cross Count: %i \n", crossNum);
+	printf("Current Cross Count: %i \n", deltaPeeps);
 }
 
 void printNumPeep(const short& peepNum_in)
@@ -131,7 +132,7 @@ void printNumPeep(const short& peepNum_in)
 // use test[5:6] (no appearing or disappearing blobs) or 
 // use test[3:4] (single exit)
 // use test[4:3] (single entry)
-void processWalkthrough(int temp_in[][COL], int oldTestNum_in, int newTestNum_in)
+void processWalkthrough(bool temp_in[][COL], int oldTestNum_in, int newTestNum_in)
 {
 	//Test getting old frame
 	readTestMat(temp_in, oldTestNum_in);
@@ -156,16 +157,10 @@ void processWalkthrough(int temp_in[][COL], int oldTestNum_in, int newTestNum_in
 	printBlobTable(oldBT, newNum);
 	orphanCare();
 	printBlobTable(oldBT, oldNum);
-	printCrossCount();
-
-	short sign = (crossNum < 0) ? -1 : 1;
-	short diff = (sign * crossNum) - oldNum;
-	diff = (diff < 0) ? 0 : diff;
-	crossNum += -sign * diff;
-	short dPeeps = sign * diff / 2;
+	printDeltaPeeps();
 }
 
-void frameSeqTest(int seqLen_in, int startNum_in, int temp_in[][COL], short& peepNum_in)
+void frameSeqTest(int seqLen_in, int startNum_in, bool temp_in[][COL], short& peepNum_in)
 {
 	for (int i = startNum_in; i < (startNum_in + seqLen_in); ++i)
 	{
@@ -189,7 +184,7 @@ void printTestMats2HeaderForm(int seqLen_in, int startNum_in)
 		char c;
 		int colNum = 1;
 		int rowNum = 0;
-		printf("short Test%d[ROW][COL] = {\n{", i);
+		printf("bool Test%d[ROW][COL] = {\n{", i);
 		while ((c = fgetc(fp)) != EOF)
 		{
 			if (c != ' ' && c != '\n')
