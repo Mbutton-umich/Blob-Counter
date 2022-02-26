@@ -1,7 +1,6 @@
 /*EECS 300 Final Project Code Team 11: frames.cpp
-Version: 1.6 Cleaned for Speed Test
-Updated: FRI19FEB22
-
+Version: 3.0 Done Deal
+Updated: FRI26FEB22
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -11,65 +10,96 @@ OPTIM: is a location that is marked for potential improvement
 !!!!: is a location with specific and dangerous importance
 */
 
-//TODO: Refactor this to use extern globals so I'm not passing shit around and don't have mile long function parameters
-//use the rBT as an example for the extern variable declare and init.
-
-
 #include "frames.h"
 
+//Initialize the DFS Stack
+coord stack[STACKMAX];
+short top = -1;
 //Initialize New Blob Table
 struct blobElem newBT[BLOBLIM];
 short newNum = 0;
-
 //Initialize Old Blob Table
 struct blobElem oldBT[BLOBLIM];
 short oldNum = 0;
-
 //Initialize the Distance Table
-struct distElem distT[(BLOBLIM * BLOBLIM)];
+struct distElem distT[BLOBLIM * BLOBLIM];
 short distNum = 0;
-
 //Initialize the Cross Count
-short crossNum = 0;
+short deltaPeeps = 0;
+
+//Push method for DFS Stack
+void push(short r_in, short c_in)
+{
+	//!!!!:No overflow cases because it wastes time and I know it won't happen, DFS is O(m*n) for spacec
+	++top;
+	stack[top] = { r_in, c_in };
+}
+
+//Pop method for the DFS Stack
+coord pop()
+{
+	//!!!!: No overflow cases because it wastes time and I know it won't happen, DFS is O(m*n) for spacec
+	--top;
+	return stack[top + 1];
+}
+
+//Empty check method for DFS
+bool isEmpty()
+{
+	if (top == -1)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
 
 //Identifies if a potential island is valid (i.e only ones, no edges, nothing visited prior)
-int validLoc(int temp_in[][COL], bool visited_in[][COL], short row_in, short col_in)
+int validLoc(bool temp_in[][COL], bool visited_in[][COL], short row_in, short col_in)
 {
 	//Check that this potential location could be part of the island we are considering
 	return (row_in >= 0) && (row_in < ROW) &&
 		   (col_in >= 0) && (col_in < COL) &&
-	       (temp_in[row_in][col_in] > 0) &&
+	       (temp_in[row_in][col_in]) &&
 	       (!visited_in[row_in][col_in]);
 }
 
-//Depth first search for array islands
-void DFS(int temp_in[][COL], bool visited_in[][COL], struct islandLabel& islandLabel_in,const short row_in, const short col_in)
+//Iterative Depth Fist Search
+/* OPTIM: I was using a recursive DFS which was faster but it overruns the ESP32 call stack. 
+/ This makes a false stack (I think in the heap), And although slower, speed testing shows only like 3 times slower...and still fast enough. Shame
+*/
+void IDFS(bool temp_in[][COL], bool visited_in[][COL], struct islandLabel& islandLabel_in, const short row_in, const short col_in)
 {
-	//Set current pixel as visited
-	visited_in[row_in][col_in] = true;
-	//Each time DFS is called island size increases, add to row column sums
-	++islandLabel_in.size;
-	islandLabel_in.r += row_in;
-	islandLabel_in.c += col_in;
 	//Array neighbor direction pairs for optimal looping
 	static short rowInd[] = { -1, -1, -1,  0, 0,  1, 1, 1 };
 	static short colInd[] = { -1,  0,  1, -1, 1, -1, 0, 1 };
-	/*Loop recursively through each neighbor
-	OPTIM: !!!!: The recursion may overfill the stack just keep in mind for large blobs make test case
-	*/
-	for (short k = 0; k < NEIGHNUM; ++k) 
+	//Put the first 1 of the island into the stack
+	push(row_in, col_in);
+	while (!isEmpty())
 	{
-		short newRow = row_in + rowInd[k];
-		short newCol = col_in + colInd[k];
-		if (validLoc(temp_in, visited_in, newRow, newCol))
+		//Pop the top
+		struct coord current = pop();
+		//Set  pixel as visited
+		visited_in[current.r][current.c] = true;
+		//Increase island size, add to row column sums
+		++islandLabel_in.size;
+		islandLabel_in.r += current.r;
+		islandLabel_in.c += current.c;
+		for (short k = 0; k < NEIGHNUM; ++k)
 		{
-			DFS(temp_in, visited_in, islandLabel_in, newRow, newCol);
+			//if neightbor valid add it to the stak
+			if (validLoc(temp_in, visited_in, current.r + rowInd[k], current.c + colInd[k]))
+			{
+				push(current.r + rowInd[k], current.c + colInd[k]);
+			}
 		}
 	}
 }
 
 //Process function for single frame
-void singleFrame(int temp_in[][COL])
+void singleFrame(bool temp_in[][COL])
 {
 	newNum = 0;
 	//Make visited matrix
@@ -81,9 +111,9 @@ void singleFrame(int temp_in[][COL])
 	for (short r = 0; r < ROW; ++r)
 		for (short c = 0; c < COL; ++c)
 			//Loop through every pixel, if not yet visited and hot (1) then do a DFS
-			if ((temp_in[r][c]==1) && (visited[r][c]==0))
+			if ((temp_in[r][c]==true) && (visited[r][c]==false))
 			{
-				DFS(temp_in, visited, freshLabel, r, c);
+				IDFS(temp_in, visited, freshLabel, r, c);
 				//Increment number of blobs
 				/*
 				OPTIM: To descriminate based on blob size (May not be issue)
@@ -108,25 +138,8 @@ void singleFrame(int temp_in[][COL])
 			}
 }
 
-//Converts out sensed numbers to a binary array
-void arr2Bin(int temp_in[][COL])
-{
-	//OPTIM: Could be implemented into the singleFrame loops
-	for(short r = 0; r < ROW; ++r)
-		for (short c = 0; c < COL; ++c)
-		{
-			if (temp_in[r][c] > HOTTHRESH)
-			{
-				temp_in[r][c] = 1;
-			}
-			else 
-			{
-				temp_in[r][c] = 0;
-			}
-		}
-}
-
 //Calculates distance between two points
+//!!!!: This actually does distance squared for speed
 float distCalc(const float r1_in, const float c1_in, const float r2_in, const float c2_in)
 {
 	float dr = r2_in - r1_in;
@@ -135,8 +148,11 @@ float distCalc(const float r1_in, const float c1_in, const float r2_in, const fl
 	return (dr * dr) + (dc * dc);
 }
 
+//Computes vertical distance to either exit or entrance lines used in orphanCare to aid counting enters/exits
 float vertDistCalc(const float r1_in, const float r2_in)
 {
+	//OPTIM: IT gives me warning if I don't cast but casting probably wastes time
+	//I realize I return a float and all reasults will be integers but all distances have been floats so to be consistent returns a float
 	return fabs((double)(r1_in - r2_in));
 }
 
@@ -210,51 +226,60 @@ void matchShortest()
 //Takes care of cases when the new Blob Table is smaller or larger than the old, determines enters/exits
 void orphanCare()
 {
+	//reset delta peeps
+	deltaPeeps = 0;
 	//Distances to entrance and exit lines
 	float entrDist = 0;
 	float exitDist = 0;
 	//Old iddex for table, need this copy because I cannot overwrite it yet, more like a running copy representing the  actual old Table while it grows or shrinks
 	short oldIndex = oldNum;
-	//New blobs appears, so the new Table is bigger
-
-	//Now loop through the old table, the case of old blob disappearing ill occur here as an unmatched entry
 	//If a blob gets taken out of the table, we have to adjust what index we are calculating distance for
 	short delOffset = 0;
-	//Loop through this larger old table
+	//Loop through the old table, the case of old blob disappearing will occur here as an unmatched entry
 	for (short n = 0; n < oldNum; ++n)
 	{
-		//Adjusted index taking into account prior deletions
+		//Adjusted index taking into account prior deletions that may have occured
 		short adjst = n + delOffset;
 		if (!oldBT[adjst].matched)
 		{
 			entrDist = vertDistCalc(oldBT[adjst].r, 0);
 			exitDist = vertDistCalc(oldBT[adjst].r, ROW);
-			--delOffset;
-			//Shift out the expired blob
-			for (short p = adjst; p < oldNum; ++p)
-			{
-				oldBT[p].r = oldBT[p + 1].r;
-				oldBT[p].c = oldBT[p + 1].c;
-			}
 			if (entrDist < exitDist)
 			{
-				--crossNum;
+				oldBT[adjst].top = true;
+				if (oldBT[adjst].top && oldBT[adjst].bottom)
+				{
+					--deltaPeeps;
+				}
 			}
 			else
 			{
-				++crossNum;
+				oldBT[adjst].bottom = true;
+				if (oldBT[adjst].top && oldBT[adjst].bottom)
+				{
+					++deltaPeeps;
+				}
+			}
+			//Shift out the expired blob
+			--delOffset;
+			for (short p = adjst; p < oldIndex; ++p)
+			{
+				oldBT[p].r = oldBT[p + 1].r;
+				oldBT[p].c = oldBT[p + 1].c;
+				oldBT[p].matched = oldBT[p + 1].matched;
+				oldBT[p].top = oldBT[p + 1].top;
+				oldBT[p].bottom = oldBT[p + 1].bottom;
 			}
 			//shorten the size of the old table
-			//TODO can remove this?
 			--oldIndex;
 		}
 		else
 		{
 			//Undo matchings
-			oldBT[n].matched = false;
+			oldBT[adjst].matched = false;
 		}
 	}
-	//First loop through the new table, the case of new blob apearing will occur here as an unmatched entry
+	//Loop through the new table, the case of new blob apearing will occur here as an unmatched entry
 	for (short m = 0; m < newNum; ++m)
 	{
 		//If something is unmatched that means we must deal with it
@@ -262,16 +287,19 @@ void orphanCare()
 		{
 			oldBT[oldIndex].r = newBT[m].r;
 			oldBT[oldIndex].c = newBT[m].c;
+			oldBT[oldIndex].matched = false;
+			oldBT[oldIndex].top = false;
+			oldBT[oldIndex].bottom = false;
 			//Now comptute the enter/exit distance on the newly registered blob and increment the crossCount
 			entrDist = vertDistCalc(oldBT[oldIndex].r, 0);
 			exitDist = vertDistCalc(oldBT[oldIndex].r, ROW);
 			if (entrDist < exitDist)
 			{
-				++crossNum;
+				oldBT[oldIndex].top = true;
 			}
 			else
 			{
-				--crossNum;
+				oldBT[oldIndex].bottom = true;
 			}
 			//Extend size of the old Table
 			++oldIndex;
@@ -287,11 +315,12 @@ void orphanCare()
 	return;
 }
 
+//Resets for  next frame
 void reset()
 {
 	//Set the new table back to empty
 	newNum = 0;
-	//Set the  destance table back to empty
+	//Set the  distance table back to empty
 	distNum = 0;
 }
 
@@ -301,33 +330,15 @@ short updateLocs()
 	//Fill the Distance Table
 	fillDist();
 	
-	//The block list keeps track of which nodes we already found a short distance between. Used to prevent selecting two short distances that repeated involve the same blobs
-	//Must be as large as possibly two full Blob Tables to track old and new indices
+	//Match old and new blobs
 	matchShortest();
 
+	//Deal with unmatched blobs
 	orphanCare();
 
 	//Clear stuff out for the next frame
 	reset();
-	/*Actually counting exits and exits is somewhat hard to think about
-	*!!!!: I don't know how robust this setup is
-	*First get the sign of crossCount, this sign is basically the direction of net exits (-) and entrances (+)
-	*Then we compute this term diff. Knowing that every blob we are currently tracking must have crossed one time. We subtract
-	*the number of tracked blobs from the magnitude of the cross count. This term can be either negative or positve.
-	*It is negative only when we have lots of blobs cancelling eachother out, so we have several people simultaneously exiting and entering
-	*at one time. In the positive case that mean we had lots of crossings and are only tracking a few blobs.
-	*This second case is more interesting to us because it is a roundabout way of knowing when stuff has actually left the door threshold that 
-	*is to say our scan frame. If sign was the direction, than diff is the magnitude of net exits and entrances.
-	*So in the negaive case we just zero it out, because there isn't enough stuff leaving the frame that we can determine is an entrance or exit
-	*Once we have diff we increment or decrement the cross count based on the sign direction. We do this because the cross count is 
-	*only meant to track people in the process of passing through the door, once they've made a full exit or entrance we can cut their 
-	*crossings out of this running sum. Finally dPeeps is the net change to occupancy for this frame update, we take into account sign 
-	*to decipher enters versus exits, and we divide by 2 because a blob must cross both the enter and exit line once to use the door.
-	*/
-	short sign = (crossNum < 0) ? -1 : 1;
-	short diff = (sign * crossNum) - oldNum;
-	diff = (diff < 0) ? 0 : diff;
-	crossNum += -sign*diff;
-	short dPeeps = sign*diff / 2;
-	return dPeeps;
+
+	//Return the change in room occupancy
+	return deltaPeeps;
 }
