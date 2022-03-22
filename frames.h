@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: frames.h
-Version: 3.0 Done Deal
-Updated: FRI26FEB22
+Version: 3.1 Reset Added, Now Does Sideways Shit
+Updated: MAR22MAR22
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -22,17 +22,19 @@ OPTIM: is a location that is marked for potential improvement
 
 //Augmentable CONSTANTS
 //!!!!: Check ROW and COL before testing matrices
-#define ROW 32
-#define COL 24
+#define ROW 24
+#define COL 32
 //The number of neighbor pixels checked during the DFS
 #define NEIGHNUM 8
+//Temperature threshold for hot-or-no
+#define HOT 29
 //Max size of the  stack for the DFS
 #define STACKMAX ROW*COL
 //Max number of blobs we can track at once
 #define BLOBLIM 8
 //The maximum scan space distance we can connect an old and new blob 
 //!!!!: This is actually distance squared because of how I lazily compute distance
-#define INTRADISTLIM ROW*ROW/4
+#define INTRADISTLIM COL*COL/4
 
 //Coordinatess that fit into the stack during DFS
 struct coord
@@ -68,6 +70,9 @@ struct distElem
 };
 
 ///****************************Comment out extern stuff for proper encapsulation when not debugging
+//Declare the temperature matrix
+extern bool temp[ROW][COL];
+
 //Declare the stack
 extern coord stack[STACKMAX];
 extern short top;
@@ -89,6 +94,8 @@ extern short deltaPeeps;
 
 ///****************************Comment out extern stuff for proper encapsulation when not debugging
 
+//Converts a 1D Sensor Vector to 2D in temp array
+void DtoDD(float frame_in[STACKMAX]);
 //Push method for DFS Stack
 void push(short r_in, short c_in);
 //Pop method for the DFS Stack
@@ -96,15 +103,15 @@ coord pop();
 //Empty check method for DFS
 bool isEmpty();
 //Checks the validity of  DFS island pixel indices, called by DFS 
-int validLoc(bool temp_in[][COL], bool visited_in[][COL], short row_in, short col_in);
+int validLoc(bool visited_in[][COL], short row_in, short col_in);
 //Does IDFS to explore blob finding size and centroid of a single island
-void IDFS(bool temp_in[][COL], bool visited_in[][COL], struct islandLabel& islandLabel_in, const short row_in, const short col_in);
+void IDFS(bool visited_in[][COL], struct islandLabel& islandLabel_in, const short row_in, const short col_in);
 //Distills a single frame down to a Blob Location Table
-void singleFrame(bool temp_in[][COL]);
+void singleFrame();
 //Computes the distance squared, used in fillDist find distances between old and new frames
 float distCalc(const float r1_in, const float c1_in, const float r2_in, const float c2_in);
 //Computes vertical distance to either exit or entrance lines used in orphanCare to aid counting enters/exits
-float vertDistCalc(const float r1_in, const float r2_in);
+float horDistCalc(const float r1_in, const float r2_in);
 //Comparator used by qsort() to arrange the distance matrix in ascendign order
 int distComp(const void* a, const void* b);
 //Takes a new and old Blob Location table and computes the distances between all entries
@@ -117,5 +124,7 @@ void orphanCare();
 void reset();
 //Manages the full process of updating the old Blob Table to the new Blob Table and counts enters/exits happening during this update
 short updateLocs();
+//Zeroizes verything related to frames
+void zeroize();
 
 #endif
