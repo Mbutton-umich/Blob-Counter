@@ -1,6 +1,6 @@
 /*EECS 300 Final Project Code Team 11: frames.cpp
-Version: 3.0 Done Deal
-Updated: FRI26FEB22
+Version: 3.1 Reset Added, Now Does Sideways Shit
+Updated: MAR22MAR22
 
 Frames tracks blobs between caputred therma camera frames
 All functions have been tested on 9x9 Arrays
@@ -11,6 +11,9 @@ OPTIM: is a location that is marked for potential improvement
 */
 
 #include "frames.h"
+
+//Initialize the Temp Matrix
+bool temp[ROW][COL];
 
 //Initialize the DFS Stack
 coord stack[STACKMAX];
@@ -27,6 +30,19 @@ short distNum = 0;
 //Initialize the Cross Count
 short deltaPeeps = 0;
 
+//Converts a 1D Sensor Float Vector to 2D Boolean Array 
+void DtoDD(float frame_in[STACKMAX])
+{
+	short k = 0;
+	for (short i = 0; i < ROW; ++i)
+	{
+		for (short j = 0; j < COL; ++j)
+		{
+			temp[i][j] = (frame_in[k] > HOT);
+			++k;
+		}
+	}
+}
 //Push method for DFS Stack
 void push(short r_in, short c_in)
 {
@@ -57,12 +73,12 @@ bool isEmpty()
 }
 
 //Identifies if a potential island is valid (i.e only ones, no edges, nothing visited prior)
-int validLoc(bool temp_in[][COL], bool visited_in[][COL], short row_in, short col_in)
+int validLoc(bool visited_in[][COL], short row_in, short col_in)
 {
 	//Check that this potential location could be part of the island we are considering
 	return (row_in >= 0) && (row_in < ROW) &&
 		   (col_in >= 0) && (col_in < COL) &&
-	       (temp_in[row_in][col_in]) &&
+	       (temp[row_in][col_in]) &&
 	       (!visited_in[row_in][col_in]);
 }
 
@@ -70,7 +86,7 @@ int validLoc(bool temp_in[][COL], bool visited_in[][COL], short row_in, short co
 /* OPTIM: I was using a recursive DFS which was faster but it overruns the ESP32 call stack. 
 / This makes a false stack (I think in the heap), And although slower, speed testing shows only like 3 times slower...and still fast enough. Shame
 */
-void IDFS(bool temp_in[][COL], bool visited_in[][COL], struct islandLabel& islandLabel_in, const short row_in, const short col_in)
+void IDFS(bool visited_in[][COL], struct islandLabel& islandLabel_in, const short row_in, const short col_in)
 {
 	//Array neighbor direction pairs for optimal looping
 	static short rowInd[] = { -1, -1, -1,  0, 0,  1, 1, 1 };
@@ -90,7 +106,7 @@ void IDFS(bool temp_in[][COL], bool visited_in[][COL], struct islandLabel& islan
 		for (short k = 0; k < NEIGHNUM; ++k)
 		{
 			//if neightbor valid add it to the stak
-			if (validLoc(temp_in, visited_in, current.r + rowInd[k], current.c + colInd[k]))
+			if (validLoc(visited_in, current.r + rowInd[k], current.c + colInd[k]))
 			{
 				push(current.r + rowInd[k], current.c + colInd[k]);
 			}
@@ -99,7 +115,7 @@ void IDFS(bool temp_in[][COL], bool visited_in[][COL], struct islandLabel& islan
 }
 
 //Process function for single frame
-void singleFrame(bool temp_in[][COL])
+void singleFrame()
 {
 	newNum = 0;
 	//Make visited matrix
@@ -111,9 +127,9 @@ void singleFrame(bool temp_in[][COL])
 	for (short r = 0; r < ROW; ++r)
 		for (short c = 0; c < COL; ++c)
 			//Loop through every pixel, if not yet visited and hot (1) then do a DFS
-			if ((temp_in[r][c]==true) && (visited[r][c]==false))
+			if ((temp[r][c]==true) && (visited[r][c]==false))
 			{
-				IDFS(temp_in, visited, freshLabel, r, c);
+				IDFS(visited, freshLabel, r, c);
 				//Increment number of blobs
 				/*
 				OPTIM: To descriminate based on blob size (May not be issue)
@@ -148,12 +164,12 @@ float distCalc(const float r1_in, const float c1_in, const float r2_in, const fl
 	return (dr * dr) + (dc * dc);
 }
 
-//Computes vertical distance to either exit or entrance lines used in orphanCare to aid counting enters/exits
-float vertDistCalc(const float r1_in, const float r2_in)
+//Computes horizontal distance to either exit or entrance lines used in orphanCare to aid counting enters/exits
+float horDistCalc(const float c1_in, const float c2_in)
 {
 	//OPTIM: IT gives me warning if I don't cast but casting probably wastes time
 	//I realize I return a float and all reasults will be integers but all distances have been floats so to be consistent returns a float
-	return fabs((double)(r1_in - r2_in));
+	return fabs((double)(c1_in - c2_in));
 }
 
 //Comparator for distance matrix computation using qsort()
@@ -242,8 +258,8 @@ void orphanCare()
 		short adjst = n + delOffset;
 		if (!oldBT[adjst].matched)
 		{
-			entrDist = vertDistCalc(oldBT[adjst].r, 0);
-			exitDist = vertDistCalc(oldBT[adjst].r, ROW);
+			entrDist = horDistCalc(oldBT[adjst].c, 0);
+			exitDist = horDistCalc(oldBT[adjst].c, COL);
 			if (entrDist < exitDist)
 			{
 				oldBT[adjst].top = true;
@@ -291,8 +307,8 @@ void orphanCare()
 			oldBT[oldIndex].top = false;
 			oldBT[oldIndex].bottom = false;
 			//Now comptute the enter/exit distance on the newly registered blob and increment the crossCount
-			entrDist = vertDistCalc(oldBT[oldIndex].r, 0);
-			exitDist = vertDistCalc(oldBT[oldIndex].r, ROW);
+			entrDist = horDistCalc(oldBT[oldIndex].c, 0);
+			exitDist = horDistCalc(oldBT[oldIndex].c, COL);
 			if (entrDist < exitDist)
 			{
 				oldBT[oldIndex].top = true;
@@ -341,4 +357,49 @@ short updateLocs()
 
 	//Return the change in room occupancy
 	return deltaPeeps;
+}
+
+void zeroize()
+{
+	//Zeroize the temperature array and the DFS Stack
+	short k = 0;
+	for (short i = 0; i < ROW; ++i)
+	{
+		for (short j = 0; j < COL; ++j)
+		{
+			temp[i][j] = false;
+			stack[k].r = 0;
+			stack[k].c = 0;
+		}
+	}
+	//Move top of stack back to -1
+	top = -1;
+
+	//Zeroize the new and old blob tables
+	for (short l = 0; l < BLOBLIM; ++l)
+	{
+		//New
+		newBT[l].r = 0;
+		newBT[l].c = 0;
+		newBT[l].matched = false;
+		newBT[l].top = false;
+		newBT[l].bottom = false;
+		//Old
+		oldBT[l].r = 0;
+		oldBT[l].c = 0;
+		oldBT[l].matched = false;
+		oldBT[l].top = false;
+		oldBT[l].bottom = false;
+	}
+
+	//Zeroize the distance table
+	for (short m = 0; m < BLOBLIM * BLOBLIM; ++m)
+	{
+		distT[m].dist = 0;
+		distT[m].oldInd = 0;
+		distT[m].newInd = 0;
+	}
+
+	//Zeroize delta persons
+	deltaPeeps = 0;
 }
