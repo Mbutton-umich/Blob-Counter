@@ -1,37 +1,11 @@
-<HTML>
+## KaTeX
 
-<HEAD>
+You can render LaTeX mathematical expressions using [KaTeX](https://khan.github.io/KaTeX/):
 
-<TITLE>Your Title Here</TITLE>
+The *Gamma function* satisfying $\Gamma(n) = (n-1)!\quad\forall n\in\mathbb N$ is via the Euler integral
 
-</HEAD>
+$$
+\Gamma(z) = \int_0^\infty t^{z-1}e^{-t}dt\,.
+$$
 
-<BODY BGCOLOR="FFFFFF">
-
-<CENTER><IMG SRC="clouds.jpg" ALIGN="BOTTOM"> </CENTER>
-
-<HR>
-
-<a href="http://somegreatsite.com">Link Name</a>
-
-is a link to another nifty site
-
-<H1>This is a Header</H1>
-
-<H2>This is a Medium Header</H2>
-
-Send me mail at <a href="mailto:support@yourcompany.com">
-
-support@yourcompany.com</a>.
-
-<P> This is a new paragraph!
-
-<P> <B>This is a new paragraph!</B>
-
-<BR> <B><I>This is a new sentence without a paragraph break, in bold italics.</I></B>
-
-<HR>
-
-</BODY>
-
-</HTML>
+> You can find more information about **LaTeX** mathematical expressions [here]
